@@ -38,7 +38,6 @@ import {
   DeckGLContainerStyledWrapper,
 } from '../../DeckGLContainer';
 import { hexToRGB } from '../../utils/colors';
-import sandboxedEval from '../../utils/sandbox';
 import { commonLayerProps } from '../common';
 import TooltipRow from '../../TooltipRow';
 import fitViewport, { Viewport } from '../../utils/fitViewport';
@@ -288,12 +287,7 @@ export const getLayer: GetLayerType<GeoJsonLayer> = function ({
   features = [];
   recurseGeoJson(payload.data, propOverrides);
 
-  let processedFeatures = features;
-  if (fd.js_data_mutator) {
-    // Applying user defined data mutator if defined
-    const jsFnMutator = sandboxedEval(fd.js_data_mutator);
-    processedFeatures = jsFnMutator(features) as ProcessedFeature[];
-  }
+  const processedFeatures = features;
 
   let pointType = 'circle';
   if (fd.enable_labels) {
@@ -305,26 +299,12 @@ export const getLayer: GetLayerType<GeoJsonLayer> = function ({
 
   let labelOpts: Partial<GeoJsonLayerProps> = {};
   if (fd.enable_labels) {
-    if (fd.enable_label_javascript_mode) {
-      const generator = sandboxedEval(fd.label_javascript_config_generator);
-      if (typeof generator === 'function') {
-        labelOpts = computeGeoJsonTextOptionsFromJsOutput(generator());
-      }
-    } else {
-      labelOpts = computeGeoJsonTextOptionsFromFormData(fd);
-    }
+    labelOpts = computeGeoJsonTextOptionsFromFormData(fd);
   }
 
   let iconOpts: Partial<GeoJsonLayerProps> = {};
   if (fd.enable_icons) {
-    if (fd.enable_icon_javascript_mode) {
-      const generator = sandboxedEval(fd.icon_javascript_config_generator);
-      if (typeof generator === 'function') {
-        iconOpts = computeGeoJsonIconOptionsFromJsOutput(generator());
-      }
-    } else {
-      iconOpts = computeGeoJsonIconOptionsFromFormData(fd);
-    }
+    iconOpts = computeGeoJsonIconOptionsFromFormData(fd);
   }
 
   return new GeoJsonLayer({

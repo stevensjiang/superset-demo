@@ -39,11 +39,7 @@ declare global {
   }
 }
 
-export interface DeckPathTransformPropsFormData extends DeckPathFormData {
-  js_data_mutator?: string;
-  js_tooltip?: string;
-  js_onclick_href?: string;
-}
+export type DeckPathTransformPropsFormData = DeckPathFormData;
 
 interface PathFeature {
   path: [number, number][];
