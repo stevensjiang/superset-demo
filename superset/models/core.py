@@ -105,6 +105,48 @@ logger = logging.getLogger(__name__)
 _ENGINE_CACHE: dict[tuple[int, str, str], Engine] = {}
 _ENGINE_CACHE_LOCK = threading.Lock()
 
+# Thread-local storage for prequeries. Engines are cached and shared across
+# threads, so we cannot dynamically add/remove event listeners without risking
+# a "deque mutated during iteration" RuntimeError in SQLAlchemy's event
+# dispatch internals. Instead, a permanent "connect" listener is registered
+# once per engine and reads the active prequeries from this thread-local.
+_PREQUERY_LOCAL: threading.local = threading.local()
+
+# Tracks which engines already have the permanent prequery listener registered.
+_PREQUERY_LISTENER_ENGINES: set[int] = set()
+
+
+def _register_prequery_listener(engine: Engine) -> None:
+    """Register a permanent 'connect' listener that executes thread-local prequeries.
+
+    This is called once per engine (guarded by ``_PREQUERY_LISTENER_ENGINES``)
+    so the listener deque is never mutated after initial setup, avoiding the
+    race condition that causes ``RuntimeError: deque mutated during iteration``.
+    """
+    engine_oid = id(engine)
+    if engine_oid in _PREQUERY_LISTENER_ENGINES:
+        return
+    _PREQUERY_LISTENER_ENGINES.add(engine_oid)
+
+    @sqla.event.listens_for(engine, "connect")
+    def _execute_prequeries(
+        dbapi_connection: Any,
+        connection_record: Any,  # pylint: disable=unused-argument
+    ) -> None:
+        store: dict[int, list[str]] | None = getattr(_PREQUERY_LOCAL, "engines", None)
+        if not store:
+            return
+        prequeries = store.get(engine_oid)
+        if not prequeries:
+            return
+        cursor = dbapi_connection.cursor()
+        try:
+            for prequery in prequeries:
+                cursor.execute(prequery)
+        finally:
+            cursor.close()
+
+
 if TYPE_CHECKING:
     from superset_core.queries.types import AsyncQueryHandle, QueryOptions, QueryResult
 
@@ -510,24 +552,16 @@ class Database(CoreDatabase, AuditMixinNullable, ImportExportMixin):  # pylint: 
                         schema=schema,
                     )
                     if prequeries:
-                        # SQLAlchemy connect event: runs prequeries on every new
-                        # DBAPI connection (e.g. SET search_path for PostgreSQL).
-                        def run_prequeries(
-                            dbapi_connection: Any,
-                            connection_record: Any,  # pylint: disable=unused-argument
-                        ) -> None:
-                            cursor = dbapi_connection.cursor()
-                            try:
-                                for prequery in prequeries:
-                                    cursor.execute(prequery)
-                            finally:
-                                cursor.close()
-
-                        sqla.event.listen(engine, "connect", run_prequeries)
+                        engine_key = id(engine)
+                        store: dict[int, list[str]] = (
+                            getattr(_PREQUERY_LOCAL, "engines", None) or {}
+                        )
+                        _PREQUERY_LOCAL.engines = store
+                        store[engine_key] = prequeries
                         try:
                             yield engine
                         finally:
-                            sqla.event.remove(engine, "connect", run_prequeries)
+                            store.pop(engine_key, None)
                     else:
                         yield engine
 
@@ -625,6 +659,9 @@ class Database(CoreDatabase, AuditMixinNullable, ImportExportMixin):  # pylint: 
             engine = create_engine(sqlalchemy_url, **engine_kwargs)
         except Exception as ex:
             raise self.db_engine_spec.get_dbapi_mapped_exception(ex) from ex
+
+        _register_prequery_listener(engine)
+
         if cache_key is not None:
             with _ENGINE_CACHE_LOCK:
                 _ENGINE_CACHE[cache_key] = engine
