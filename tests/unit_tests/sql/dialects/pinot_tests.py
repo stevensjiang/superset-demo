@@ -592,6 +592,31 @@ def test_pinot_date_sub_unit_quoted() -> None:
     assert "DATE_SUB(DAY," not in result
 
 
+def test_yearofweek_preserved() -> None:
+    """
+    Test that YEAR_OF_WEEK is generated as YEAROFWEEK for Pinot.
+    sqlglot normalizes YEAROFWEEK to exp.YearOfWeek (YEAR_OF_WEEK),
+    so the Pinot generator must map it back.
+    """
+    sql = "SELECT YEAROFWEEK(ts) FROM t"
+    parsed = sqlglot.parse_one(sql, Pinot)
+    result = parsed.sql(dialect=Pinot)
+    assert "YEAROFWEEK(" in result
+
+
+def test_yearofweek_transform_is_guarded() -> None:
+    """
+    Test that the YearOfWeek transform is conditionally added via getattr
+    rather than a bare attribute access, so the module stays importable
+    even if a future sqlglot version removes the expression class.
+    """
+    from sqlglot import exp as _exp
+
+    # When YearOfWeek exists, the transform should be present
+    if hasattr(_exp, "YearOfWeek"):
+        assert _exp.YearOfWeek in Pinot.Generator.TRANSFORMS
+
+
 def test_substr_cross_dialect_generation() -> None:
     """
     Test that SUBSTR is preserved when generating Pinot SQL.

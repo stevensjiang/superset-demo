@@ -144,11 +144,16 @@ class Pinot(MySQL):
                 e.args.get("expression"),
                 e.args.get("variant"),
             ),
-            # Preserve Pinot's YEAROFWEEK (sqlglot normalizes to YEAR_OF_WEEK)
-            exp.YearOfWeek: lambda self, e: self.func("YEAROFWEEK", e.this),
         }
         # Remove DATE_TRUNC transformation - Pinot supports standard SQL DATE_TRUNC
         TRANSFORMS.pop(exp.DateTrunc, None)
+
+        # Preserve Pinot's YEAROFWEEK (sqlglot normalizes to YEAR_OF_WEEK).
+        # Guard with getattr so the module still loads if a future sqlglot
+        # version removes or renames the expression class.
+        _YearOfWeek = getattr(exp, "YearOfWeek", None)
+        if _YearOfWeek is not None:
+            TRANSFORMS[_YearOfWeek] = lambda self, e: self.func("YEAROFWEEK", e.this)
 
         def datatype_sql(self, expression: exp.DataType) -> str:
             # Don't use MySQL's VARCHAR size requirement logic
