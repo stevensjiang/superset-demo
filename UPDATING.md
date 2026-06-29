@@ -24,6 +24,25 @@ assists people when migrating to a new version.
 
 ## Next
 
+### Removed JS-based tooltips/controls and vm2 dependency from deck.gl charts
+
+The JavaScript sandbox (`sandboxedEval`) used by deck.gl chart plugins has been
+removed along with the `vm2` / `vm-browserify` dependency. The following form-data
+fields no longer have any effect and are silently ignored:
+
+- `js_tooltip`
+- `js_onclick_href`
+- `js_data_mutator`
+- `label_javascript_config_generator`
+- `icon_javascript_config_generator`
+
+The "Advanced" section of deck.gl control panels no longer exposes these
+JavaScript text-area controls. Existing saved charts that relied on custom JS
+code in these fields will still render but the JS customizations will not execute.
+
+A replacement using a safe templating approach (Jinja / Handlebars / Markdown)
+will be introduced as a non-breaking addition in a future SIP.
+
 ### Guest-token RLS rules reject unknown fields
 
 The `rls` rules passed to `POST /api/v1/security/guest_token/` are now validated strictly: a rule may only contain `dataset` and `clause`. Previously unknown fields were silently dropped, so a mistyped or legacy scope key (most commonly `datasource` instead of `dataset`) produced a rule with no `dataset`, which is treated as a *global* rule applied to every dataset the embedded resource can reach. Such a request now returns HTTP 400 identifying the offending field instead of issuing a token with an unintended global rule. Integrators that were sending extra fields in RLS rules must remove them; valid dataset-scoped (`{"dataset": 41, "clause": "..."}`) and global (`{"clause": "..."}`) rules are unaffected.

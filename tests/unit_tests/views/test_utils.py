@@ -17,32 +17,12 @@
 """Tests for superset.views.utils module"""
 
 from superset.views.utils import (
-    get_form_data,
     JS_CONTROL_FORM_DATA_KEYS,
     REJECTED_FORM_DATA_KEYS,
 )
 
 
-def test_rejected_form_data_keys_cover_all_js_control_keys() -> None:
-    """
-    With ENABLE_JAVASCRIPT_CONTROLS disabled (the default), every form_data key
-    that is later executed as JavaScript by the deck.gl charts must be rejected.
-
-    This guards against a new ``sandboxedEval(fd.<key>)`` call site being added
-    without also adding its key to the strip list.
-    """
-    # The test app keeps ENABLE_JAVASCRIPT_CONTROLS at its default (off).
-    assert set(JS_CONTROL_FORM_DATA_KEYS) <= set(REJECTED_FORM_DATA_KEYS)
-
-
-def test_get_form_data_strips_js_control_keys() -> None:
-    """get_form_data drops all JS-executed keys when the flag is disabled."""
-    initial_form_data = dict.fromkeys(JS_CONTROL_FORM_DATA_KEYS, "data => data")
-    initial_form_data["viz_type"] = "deck_geojson"
-
-    form_data, _ = get_form_data(initial_form_data=initial_form_data)
-
-    for key in JS_CONTROL_FORM_DATA_KEYS:
-        assert key not in form_data
-    # Non-JS keys are preserved.
-    assert form_data["viz_type"] == "deck_geojson"
+def test_js_control_lists_are_empty_after_removal() -> None:
+    """JS-based controls have been removed; both lists should be empty."""
+    assert JS_CONTROL_FORM_DATA_KEYS == []
+    assert REJECTED_FORM_DATA_KEYS == []

@@ -39,7 +39,7 @@ from superset.exceptions import (
     SupersetException,
     SupersetSecurityException,
 )
-from superset.extensions import cache_manager, feature_flag_manager, security_manager
+from superset.extensions import cache_manager, security_manager
 from superset.legacy import update_time_range
 from superset.models.core import Database
 from superset.models.dashboard import Dashboard
@@ -58,22 +58,12 @@ from superset.viz import BaseViz
 logger = logging.getLogger(__name__)
 stats_logger = app.config["STATS_LOGGER"]
 
-# Form-data keys whose values are executed as JavaScript at render time by the
-# deck.gl charts (via the frontend ``sandboxedEval`` helper). These are stripped
-# from incoming form_data unless the ``ENABLE_JAVASCRIPT_CONTROLS`` feature flag
-# is enabled. Keep this list in sync with every ``sandboxedEval(fd.<key>)`` call
-# site in the deck.gl plugins.
-JS_CONTROL_FORM_DATA_KEYS: list[str] = [
-    "js_tooltip",
-    "js_onclick_href",
-    "js_data_mutator",
-    "label_javascript_config_generator",
-    "icon_javascript_config_generator",
-]
+# JS-based controls (js_tooltip, js_onclick_href, js_data_mutator, etc.) have
+# been removed. The stripped-key lists are kept as empty constants so that any
+# downstream code referencing them continues to work without modification.
+JS_CONTROL_FORM_DATA_KEYS: list[str] = []
 
 REJECTED_FORM_DATA_KEYS: list[str] = []
-if not feature_flag_manager.is_feature_enabled("ENABLE_JAVASCRIPT_CONTROLS"):
-    REJECTED_FORM_DATA_KEYS = list(JS_CONTROL_FORM_DATA_KEYS)
 
 
 def redirect_to_login(next_target: str | None = None) -> FlaskResponse:
